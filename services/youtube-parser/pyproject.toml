@@ -4,8 +4,10 @@ version = "0.1.0"
 description = "Recipe Generator from Youtube Transcript"
 requires-python = ">=3.11"
 dependencies = [
+    "requests",
+    "python-dotenv",
     "youtube-transcript-api>=0.6.1",
-    "pydantic>=2.6.0"
+    "pydantic>=2.6.0",
 ]
 
 [project.optional-dependencies]

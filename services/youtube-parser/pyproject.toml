@@ -1,0 +1,46 @@
+[project]
+name = "youtube_parser"
+version = "0.1.0"
+description = "Recipe Generator from Youtube Transcript"
+requires-python = ">=3.11"
+dependencies = [
+    "youtube-transcript-api>=0.6.1",
+    "pydantic>=2.6.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "mypy>=1.5.0",
+    "ruff>=0.0.284",
+    
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["services/youtube-parser"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --cov=services"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+select = ["E", "F", "B", "I"]
+ignore = []
+
+[tool.uv]
+resolution = "highest" 

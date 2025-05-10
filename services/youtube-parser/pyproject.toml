@@ -8,6 +8,7 @@ dependencies = [
     "python-dotenv",
     "youtube-transcript-api>=0.6.1",
     "pydantic>=2.6.0",
+    "mongoengine",
 ]
 
 [project.optional-dependencies]

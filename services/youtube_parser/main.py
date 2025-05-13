@@ -1,30 +1,36 @@
-import fastapi 
-import yt_scrape
-from dotenv import load_dotenv
-import os
+# import fastapi 
+# from . import yt_scrape
+# from dotenv import load_dotenv
+# import os
 
-app = fastapi.FastAPI()
+# app = fastapi.FastAPI()
 
-@app.get("/")
-def read_root():
-    return {"message": "Hello, World!"}
+# # Initialize YouTubeScraper
+# load_dotenv()
+# api_key = os.getenv("YOUTUBE_API_KEY")
+# if not api_key:
+#     raise ValueError("YOUTUBE_API_KEY environment variable not set")
+# scraper = yt_scrape.YouTubeScraper(api_key)
 
+# @app.get("/")
+# def read_root():
+#     return {"message": "Hello, World!"}
 
-@app.post("/scrape_channel")
-async def scrape_channel(handle: str, language: str = "en", quantity: int = 200):
-    channel_id = yt_scrape.get_channel_id_by_handle(handle)
-    result = yt_scrape.process_videos(quantity, language, type="channel_id", arg=channel_id)
-    return result 
+# @app.post("/scrape_channel")
+# async def scrape_channel(handle: str, language: str = "en", quantity: int = 200):
+#     channel_id = scraper.get_channel_id_by_handle(handle)
+#     result = scraper.process_videos(type="channel_id", arg=channel_id)
+#     return result 
 
-@app.post("/scrape_query")
-async def scrape_query(query: str, language: str = "en", quantity: int = 50):
-    result = yt_scrape.process_videos(quantity, language, type="query", arg=query)
-    return result 
+# @app.post("/scrape_query")
+# async def scrape_query(query: str, language: str = "en", quantity: int = 50):
+#     result = scraper.process_videos(type="query", arg=query)
+#     return result 
 
-@app.post("/scrape_video_id")
-async def scrape_video_id(id: str, language: str = "en"):
-    result = yt_scrape.process_videos(language=language, arg=id)
-    return result 
+# @app.post("/scrape_video_id")
+# async def scrape_video_id(id: str, language: str = "en"):
+#     result = scraper.process_videos(type="id", arg=id)
+#     return result 
 
 
 # if __name__ == "__main__":

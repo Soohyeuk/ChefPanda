@@ -1,6 +1,7 @@
 import requests
-from youtube_transcript_api import YouTubeTranscriptApi
-from type import FetchedTranscript
+from youtube_transcript_api import YouTubeTranscriptApi # type: ignore
+from .type import FetchedTranscript, FetchedTranscriptSnippet
+from typing import List, Tuple, Dict, Any, Optional
 
 
 
@@ -9,6 +10,23 @@ class YouTubeScraper:
         self.api_key = api_key
         self.language = language
         self.max_results = max_results
+
+    def _convert_transcript(self, ytt_transcript: Any) -> FetchedTranscript:
+        """Convert YouTubeTranscriptApi transcript to our FetchedTranscript type"""
+        snippets = [
+            FetchedTranscriptSnippet(
+                text=item['text'],
+                start=item['start'],
+                duration=item['duration']
+            )
+            for item in ytt_transcript
+        ]
+        return FetchedTranscript(
+            snippets=snippets,
+            video_id=ytt_transcript.video_id,
+            language_code=ytt_transcript.language_code,
+            is_generated=ytt_transcript.is_generated
+        )
 
     def get_transcript(self, video_id: str) -> FetchedTranscript:
         """
@@ -21,9 +39,10 @@ class YouTubeScraper:
             FetchedTranscript object
         """
         ytt_api = YouTubeTranscriptApi()
-        return ytt_api.fetch(video_id, languages=self.language)
+        ytt_transcript = ytt_api.fetch(video_id, languages=self.language)
+        return self._convert_transcript(ytt_transcript)
 
-    def transcript_to_dict(transcript: FetchedTranscript, title: str) -> dict:
+    def transcript_to_dict(self, transcript: FetchedTranscript, title: str) -> Dict[str, Any]:
         """
         Convert transcript to JSON format.
         
@@ -32,7 +51,7 @@ class YouTubeScraper:
             title: Video title
         
         Returns:
-            JSON string containing transcript data
+            Dictionary containing transcript data
         """
         snippets = ""
         for snippet in transcript.snippets:
@@ -48,7 +67,7 @@ class YouTubeScraper:
 
         return transcript_dict
 
-    def fetch_videos_by_query(self, query: str) -> list[tuple[str, str]]:
+    def fetch_videos_by_query(self, query: str) -> List[Tuple[str, str]]:
         """
         Fetch video IDs and titles from YouTube search.
         
@@ -59,7 +78,7 @@ class YouTubeScraper:
             List of tuples containing (video_id, title)
         """
         url = 'https://www.googleapis.com/youtube/v3/search'
-        params = {
+        params: Dict[str, Any] = {
             'part': 'snippet',
             'q': query,
             'type': 'video',
@@ -72,7 +91,7 @@ class YouTubeScraper:
         return [(item['id']['videoId'], item['snippet']['title']) 
                 for item in data.get('items', [])]
 
-    def fetch_channel_videos_by_id(self, channel_id: str) -> list[tuple[str, str]]:
+    def fetch_channel_videos_by_id(self, channel_id: str) -> List[Tuple[str, str]]:
         """
         Fetch video IDs and titles from a specific YouTube channel.
 
@@ -83,7 +102,7 @@ class YouTubeScraper:
             List of tuples containing (video_id, title)
         """
         url = 'https://www.googleapis.com/youtube/v3/search'
-        params = {
+        params: Dict[str, Any] = {
             'part': 'snippet',
             'channelId': channel_id,
             'type': 'video',
@@ -108,7 +127,7 @@ class YouTubeScraper:
             Channel ID
         """
         url = 'https://www.googleapis.com/youtube/v3/channels'
-        params = {
+        params: Dict[str, Any] = {
             'part': 'id',
             'forHandle': handle.lstrip('@'),
             'key': self.api_key
@@ -122,12 +141,12 @@ class YouTubeScraper:
         
         return items[0]['id']
 
-    def fetch_video_by_id(self, video_id: str) -> list[tuple[str, str]]:
+    def fetch_video_by_id(self, video_id: str) -> List[Tuple[str, str]]:
         """
         Fetch video details by ID and return a list of (video_id, title) tuples.
         """
         url = 'https://www.googleapis.com/youtube/v3/videos'
-        params = {
+        params: Dict[str, Any] = {
             'part': 'snippet',
             'id': video_id,
             'key': self.api_key
@@ -137,7 +156,7 @@ class YouTubeScraper:
         items = data.get('items', [])
         return [(item['id'], item['snippet']['title']) for item in items]
 
-    def process_videos(self, type: str = "id", arg: any = None) -> list[str]:
+    def process_videos(self, type: str = "id", arg: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Process videos by fetching them and their transcripts.
         Retries 3 times if there is an error per video. 
@@ -148,13 +167,17 @@ class YouTubeScraper:
         Returns:
             List of dicts containing video and transcript data
         """
+        if arg is None:
+            raise ValueError("arg parameter cannot be None")
+
         if type == "id":
             videos = self.fetch_video_by_id(arg)
         elif type == "query": 
             videos = self.fetch_videos_by_query(arg)
-        
         elif type == 'channel_id': 
             videos = self.fetch_channel_videos_by_id(arg)
+        else:
+            raise ValueError(f"Invalid type: {type}")
         
         results = []
         for video_id, title in videos:

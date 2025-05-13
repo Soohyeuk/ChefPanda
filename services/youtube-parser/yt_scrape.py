@@ -1,81 +1,177 @@
 import requests
-from dotenv import load_dotenv
-import os
+from youtube_transcript_api import YouTubeTranscriptApi
+from type import FetchedTranscript
 
 
-def fetch_videos_by_id(query: str, max_results: int = 50) -> list[tuple[str, str]]:
-    """
-    Fetch video IDs and titles from YouTube search.
-    
-    Args:
-        query: Search query string
-        max_results: Maximum number of results to return (default: 50)
-    
-    Returns:
-        List of tuples containing (video_id, title)
-    """
-    load_dotenv()
-    API_KEY = os.getenv('YOUTUBE_API_KEY')
-    if not API_KEY:
-        raise ValueError("YOUTUBE_API_KEY not found in environment variables")
-    url = 'https://www.googleapis.com/youtube/v3/search'
-    params = {
-        'part': 'snippet',
-        'q': query,
-        'type': 'video',
-        'maxResults': max_results,
-        'key': API_KEY
-    }
-    response = requests.get(url, params=params)
-    data = response.json()
 
-    return [(item['id']['videoId'], item['snippet']['title']) 
-             for item in data.get('items', [])]
+class YouTubeScraper:
+    def __init__(self, api_key:str, language:str = "en", max_results:int=50): 
+        self.api_key = api_key
+        self.language = language
+        self.max_results = max_results
+
+    def get_transcript(self, video_id: str) -> FetchedTranscript:
+        """
+        Fetch transcript for a given video ID.
+        
+        Args:
+            video_id: YouTube video ID
+
+        Returns:
+            FetchedTranscript object
+        """
+        ytt_api = YouTubeTranscriptApi()
+        return ytt_api.fetch(video_id, languages=self.language)
+
+    def transcript_to_dict(transcript: FetchedTranscript, title: str) -> dict:
+        """
+        Convert transcript to JSON format.
+        
+        Args:
+            transcript: FetchedTranscript object
+            title: Video title
+        
+        Returns:
+            JSON string containing transcript data
+        """
+        snippets = ""
+        for snippet in transcript.snippets:
+            snippets += (snippet.text + ". ")
+
+        transcript_dict = {
+            "title": title,
+            "video_id": transcript.video_id,
+            "is_generated": transcript.is_generated,
+            "language_code": transcript.language_code,
+            "snippets": snippets
+        }
+
+        return transcript_dict
+
+    def fetch_videos_by_query(self, query: str) -> list[tuple[str, str]]:
+        """
+        Fetch video IDs and titles from YouTube search.
+        
+        Args:
+            query: Search query string
+        
+        Returns:
+            List of tuples containing (video_id, title)
+        """
+        url = 'https://www.googleapis.com/youtube/v3/search'
+        params = {
+            'part': 'snippet',
+            'q': query,
+            'type': 'video',
+            'maxResults': self.max_results,
+            'key': self.api_key
+        }
+        response = requests.get(url, params=params)
+        data = response.json()
+
+        return [(item['id']['videoId'], item['snippet']['title']) 
+                for item in data.get('items', [])]
+
+    def fetch_channel_videos_by_id(self, channel_id: str) -> list[tuple[str, str]]:
+        """
+        Fetch video IDs and titles from a specific YouTube channel.
+
+        Args:
+            channel_id: YouTube channel ID
+        
+        Returns:
+            List of tuples containing (video_id, title)
+        """
+        url = 'https://www.googleapis.com/youtube/v3/search'
+        params = {
+            'part': 'snippet',
+            'channelId': channel_id,
+            'type': 'video',
+            'order': 'date',
+            'maxResults': self.max_results,
+            'key': self.api_key
+        }
+        response = requests.get(url, params=params)
+        data = response.json()
+
+        return [(item['id']['videoId'], item['snippet']['title']) 
+                for item in data.get('items', [])]
+
+    def get_channel_id_by_handle(self, handle: str) -> str:
+        """
+        Resolve a YouTube handle (e.g. '@TryToEat') to a channel ID.
+
+        Args:
+            handle: YouTube handle (e.g. '@TryToEat')
+        
+        Returns:
+            Channel ID
+        """
+        url = 'https://www.googleapis.com/youtube/v3/channels'
+        params = {
+            'part': 'id',
+            'forHandle': handle.lstrip('@'),
+            'key': self.api_key
+        }
+        response = requests.get(url, params=params)
+        data = response.json()
+
+        items = data.get('items', [])
+        if not items:
+            raise ValueError(f"Channel not found for handle: {handle}")
+        
+        return items[0]['id']
+
+    def fetch_video_by_id(self, video_id: str) -> list[tuple[str, str]]:
+        """
+        Fetch video details by ID and return a list of (video_id, title) tuples.
+        """
+        url = 'https://www.googleapis.com/youtube/v3/videos'
+        params = {
+            'part': 'snippet',
+            'id': video_id,
+            'key': self.api_key
+        }
+        response = requests.get(url, params=params)
+        data = response.json()
+        items = data.get('items', [])
+        return [(item['id'], item['snippet']['title']) for item in items]
+
+    def process_videos(self, type: str = "id", arg: any = None) -> list[str]:
+        """
+        Process videos by fetching them and their transcripts.
+        Retries 3 times if there is an error per video. 
+
+        Args:
+            type: Type of search to perform
+            arg: Argument for the search
+        Returns:
+            List of dicts containing video and transcript data
+        """
+        if type == "id":
+            videos = self.fetch_video_by_id(arg)
+        elif type == "query": 
+            videos = self.fetch_videos_by_query(arg)
+        
+        elif type == 'channel_id': 
+            videos = self.fetch_channel_videos_by_id(arg)
+        
+        results = []
+        for video_id, title in videos:
+            for attempt in range(4):
+                try:
+                    transcript = self.get_transcript(video_id)
+                    dict = self.transcript_to_dict(transcript, title)
+                    results.append(dict)
+                    break 
+                except Exception as e:
+                    if attempt < 3:
+                        print(f"Error processing video {video_id} (attempt {attempt+1}): {str(e)}. Retrying...")
+                    else:
+                        print(f"Failed to process video {video_id} after 4 attempts: {str(e)}")
+
+        return results
 
 
-def get_channel_id_by_handle(handle: str) -> str:
-    """
-    Resolve a YouTube handle (e.g. '@TryToEat') to a channel ID.
-    """
-    load_dotenv()
-    API_KEY = os.getenv('YOUTUBE_API_KEY')
-    if not API_KEY:
-        raise ValueError("YOUTUBE_API_KEY not found in environment variables")
-    url = 'https://www.googleapis.com/youtube/v3/channels'
-    params = {
-        'part': 'id',
-        'forHandle': handle.lstrip('@'),
-        'key': API_KEY
-    }
-    response = requests.get(url, params=params)
-    data = response.json()
 
-    items = data.get('items', [])
-    if not items:
-        raise ValueError(f"Channel not found for handle: {handle}")
-    
-    return items[0]['id']
-
-def fetch_channel_videos_by_id(channel_id: str, max_results: int = 200) -> list[tuple[str, str]]:
-    """
-    Fetch video IDs and titles from a specific YouTube channel.
-    """
-    load_dotenv()
-    API_KEY = os.getenv('YOUTUBE_API_KEY')
-    if not API_KEY:
-        raise ValueError("YOUTUBE_API_KEY not found in environment variables")
-    url = 'https://www.googleapis.com/youtube/v3/search'
-    params = {
-        'part': 'snippet',
-        'channelId': channel_id,
-        'type': 'video',
-        'order': 'date',
-        'maxResults': max_results,
-        'key': API_KEY
-    }
-    response = requests.get(url, params=params)
-    data = response.json()
-
-    return [(item['id']['videoId'], item['snippet']['title']) 
-            for item in data.get('items', [])]
 

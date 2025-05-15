@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel # type: ignore
 from mongoengine import Document, StringField, BooleanField, DateTimeField # type: ignore
 from typing import List, Dict
 from datetime import datetime

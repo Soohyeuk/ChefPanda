@@ -1,10 +1,14 @@
+"""
+Recipe generation and parsing functionality.
+"""
+
 from .type import Ingredient, InstructionStep, Recipe
 import openai # type: ignore
 from typing import List, Optional, Dict
 from pathlib import Path
 
 class RecipeGenerator:  
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str): 
         self.api_key = api_key
         self.openai = openai.OpenAI(api_key=self.api_key)
         self._load_prompts()

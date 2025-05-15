@@ -1,4 +1,4 @@
-import pytest
+import pytest # type: ignore
 from unittest.mock import Mock, patch
 from youtube_parser.yt_scrape import YouTubeScraper
 from youtube_parser.type import FetchedTranscript, FetchedTranscriptSnippet

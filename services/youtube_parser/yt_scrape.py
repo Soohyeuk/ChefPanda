@@ -1,6 +1,10 @@
-import requests
-from youtube_transcript_api import YouTubeTranscriptApi # type: ignore
+"""
+YouTube video scraping and transcript processing functionality.
+"""
+
+import requests # type: ignore
 from .type import FetchedTranscript, FetchedTranscriptSnippet
+from youtube_transcript_api import YouTubeTranscriptApi # type: ignore
 from typing import List, Tuple, Dict, Any, Optional
 
 

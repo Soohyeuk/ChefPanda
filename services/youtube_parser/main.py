@@ -1,113 +1,141 @@
-# import fastapi 
-# from . import yt_scrape
-# from dotenv import load_dotenv
-# import os
+"""
+FastAPI server for YouTube video parsing and recipe generation.
+"""
 
-# app = fastapi.FastAPI()
+import fastapi # type: ignore
+from fastapi import HTTPException # type: ignore
+from pydantic import BaseModel # type: ignore
+from .yt_scrape import YouTubeScraper
+from .recipe_gen import RecipeGenerator
+from dotenv import load_dotenv # type: ignore
+import os
+from contextlib import asynccontextmanager
+from typing import List, Dict, Any
 
-# # Initialize YouTubeScraper
-# load_dotenv()
-# api_key = os.getenv("YOUTUBE_API_KEY")
-# if not api_key:
-#     raise ValueError("YOUTUBE_API_KEY environment variable not set")
-# scraper = yt_scrape.YouTubeScraper(api_key)
+class ScrapeRequest(BaseModel):
+    handle: str
+    language: str = "en"
+    quantity: int = 200
 
-# @app.get("/")
-# def read_root():
-#     return {"message": "Hello, World!"}
+class QueryRequest(BaseModel):
+    query: str
+    language: str = "en"
+    quantity: int = 50
 
-# @app.post("/scrape_channel")
-# async def scrape_channel(handle: str, language: str = "en", quantity: int = 200):
-#     channel_id = scraper.get_channel_id_by_handle(handle)
-#     result = scraper.process_videos(type="channel_id", arg=channel_id)
-#     return result 
+class VideoRequest(BaseModel):
+    id: str
+    language: str = "en"
 
-# @app.post("/scrape_query")
-# async def scrape_query(query: str, language: str = "en", quantity: int = 50):
-#     result = scraper.process_videos(type="query", arg=query)
-#     return result 
+yt_api_key = None 
+openai_api_key = None 
 
-# @app.post("/scrape_video_id")
-# async def scrape_video_id(id: str, language: str = "en"):
-#     result = scraper.process_videos(type="id", arg=id)
-#     return result 
-
-
-# if __name__ == "__main__":
-#     load_dotenv()
-#     MONGODB_KEY = os.getenv('MONGODB_KEY')
-#     MONGODB_NAME = os.getenv('MONGODB_NAME')
-#     me.connect(MONGODB_NAME, host=MONGODB_KEY)
-#     all_results = {
-#         "search_results": [],
-#         "channel_results": {}
-#     }
+@asynccontextmanager
+async def lifespan(app: fastapi.FastAPI):
+    """
+    Lifespan context manager for FastAPI application.
+    Handles startup and shutdown events.
+    """
+    load_dotenv()
+    global yt_api_key, openai_api_key
+    yt_api_key = os.getenv("YOUTUBE_API_KEY")
+    openai_api_key = os.getenv("OPENAI_API_KEY")
     
-#     search_query = "cooking tutorial recipe"
-#     results = process_videos(50, 'en', type="query", arg=search_query)
-#     all_results["search_results"] = [json.loads(result) for result in results]
+    if not yt_api_key:
+        raise ValueError("YOUTUBE_API_KEY environment variable not set")
+    if not openai_api_key:
+        raise ValueError("OPENAI_API_KEY environment variable not set")
     
-#     handles = ['@YOOXICMAN', '@1mincook', '@TryToEat']
+    yield  
 
-#     for handle in handles:
-#         try:
-#             print(f"\nFetching videos from {handle}...")
-#             channel_id = yt_scrape.get_channel_id_by_handle(handle)
-#             results2 = process_videos(50, 'ko', type="channel_id", arg=channel_id)
-#             all_results["channel_results"][handle] = [json.loads(result) for result in results2]
+app = fastapi.FastAPI(
+    title="ChefPanda YouTube Parser",
+    description="Service for scraping and parsing YouTube cooking videos",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+@app.get("/")
+def read_root():
+    return {"message": "Hello, World!"}
+
+@app.post("/scrape_channel")
+async def scrape_channel(request: ScrapeRequest) -> List[Dict[str, Any]]:
+    """
+    Scrape recipes from a YouTube channel.
+    
+    Args:
+        request: ScrapeRequest containing:
+            - handle: YouTube channel handle (e.g. 'yooxicman')
+            - language: Language code (default: 'en')
+            - quantity: Number of videos to scrape (default: 200)
             
-#         except Exception as e:
-#             print(f"Error for {handle}: {e}")
-    
-#     # Save to MongoDB
-#     print("\nSaving results to MongoDB...")
-#     save_to_mongodb(all_results)
-    
-#     # Also save to JSON file as backup
-#     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-#     with open(f'youtube_results_{timestamp}.json', 'w', encoding='utf-8') as f:
-#         json.dump(all_results, f, ensure_ascii=False, indent=2)
+    Returns:
+        List[Dict[str, Any]]: List of recipe dictionaries
+    """
+    try:
+        scraper = YouTubeScraper(yt_api_key, request.language, request.quantity)
+        channel_id = scraper.get_channel_id_by_handle(request.handle)
+        result = scraper.fetch_channel_videos_by_id(channel_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
+    try:
+        recipes = []
+        for video in result:
+            recipe_gen = RecipeGenerator(openai_api_key)
+            recipe = recipe_gen.generate_recipe(str(video))
+            recipes.append(recipe.model_dump())
+        return recipes
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing recipes: {str(e)}")
 
-# import mongoengine as me
-# from type import Video
-# def save_to_mongodb(results_dict: dict[list[dict]]) -> None:
-#     """
-#     Save video results to MongoDB
+@app.post("/scrape_query")
+async def scrape_query(request: QueryRequest) -> Dict[str, Any]:
+    """
+    Search and scrape recipes based on a query.
     
-#     Args:
-#         results_dict: Dictionary containing search_results and channel_results
-#     """
-#     for video_data in results_dict["search_results"]:
-#         try:
-#             video = Video(
-#                 title=video_data["title"],
-#                 video_id=video_data["video_id"],
-#                 is_generated=video_data["is_generated"],
-#                 language_code=video_data["language_code"],
-#                 snippets=video_data["snippets"],
-#                 source_type="search"
-#             )
-#             video.save()
-#         except me.NotUniqueError:
-#             print(f"Video {video_data['video_id']} already exists in database")
-#         except Exception as e:
-#             print(f"Error saving video {video_data['video_id']}: {str(e)}")
+    Args:
+        request: QueryRequest containing:
+            - query: Search query string
+            - language: Language code (default: 'en')
+            - quantity: Number of videos to scrape (default: 50)
+    """
+    try:
+        scraper = YouTubeScraper(yt_api_key, request.language, request.quantity)
+        results = scraper.process_videos(type="query", arg=request.query)
+        if not results:
+            raise HTTPException(status_code=404, detail="No videos found for query")
+        
+        recipe_gen = RecipeGenerator(openai_api_key)
+        recipe = recipe_gen.generate_recipe(str(results))
+        return recipe.model_dump()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
-#     for channel_handle, videos in results_dict["channel_results"].items():
-#         for video_data in videos:
-#             try:
-#                 video = Video(
-#                     title=video_data["title"],
-#                     video_id=video_data["video_id"],
-#                     is_generated=video_data["is_generated"],
-#                     language_code=video_data["language_code"],
-#                     snippets=video_data["snippets"],
-#                     source_type=channel_handle
-#                 )
-#                 video.save()
-#             except me.NotUniqueError:
-#                 print(f"Video {video_data['video_id']} already exists in database")
-#             except Exception as e:
-#                 print(f"Error saving video {video_data['video_id']}: {str(e)}")
+@app.post("/scrape_video_id")
+async def scrape_video_id(request: VideoRequest) -> Dict[str, Any]:
+    """
+    Scrape a recipe from a specific video ID.
+    
+    Args:
+        request: VideoRequest containing:
+            - id: YouTube video ID
+            - language: Language code (default: 'en')
+    """
+    try:
+        scraper = YouTubeScraper(yt_api_key, request.language)
+        results = scraper.process_videos(type="id", arg=request.id)
+        if not results:
+            raise HTTPException(status_code=404, detail="Video not found or no transcript available")
+        
+        recipe_gen = RecipeGenerator(openai_api_key)
+        recipe = recipe_gen.generate_recipe(str(results))
+        return recipe.model_dump()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
+
 

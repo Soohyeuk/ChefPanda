@@ -180,25 +180,3 @@ class RecipeGenerator:
         if self.recipe.nutritional_info is None:
             raise RuntimeError("Nutritional info not set in recipe")
         return self.recipe.nutritional_info
-
-
-if __name__ == "__main__":
-    from dotenv import load_dotenv
-    import os
-    from yt_scrape import YouTubeScraper
-    load_dotenv()
-    youtube_api_key = os.getenv("YOUTUBE_API_KEY")
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    print(f"OpenAI API key loaded: {'Yes' if openai_api_key else 'No'}")
-    print(f"OpenAI API key length: {len(openai_api_key) if openai_api_key else 0}")  # Debug line
-    print(f"OpenAI API key starts with: {openai_api_key[:5] + '...' if openai_api_key else 'None'}")  # Debug line
-    scraper = YouTubeScraper(youtube_api_key, language="en", max_results=1)
-    channel_id = scraper.get_channel_id_by_handle("@EssenRecipes")
-    videos = scraper.process_videos(type="channel_id", arg=channel_id)
-
-    print("Generating recipe...")
-    recipe_gen = RecipeGenerator(openai_api_key)
-    
-    print("openai working")
-    recipe = recipe_gen.generate_recipe(videos[0]["snippets"])
-    print(recipe)

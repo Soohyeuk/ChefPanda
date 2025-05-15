@@ -76,7 +76,6 @@ async def scrape_channel(request: ScrapeRequest) -> List[Dict[str, Any]]:
         scraper = YouTubeScraper(yt_api_key, request.language, request.quantity)
         channel_id = scraper.get_channel_id_by_handle(request.handle)
         result = scraper.process_videos(type="channel_id", arg=channel_id)
-        print(result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
@@ -84,14 +83,17 @@ async def scrape_channel(request: ScrapeRequest) -> List[Dict[str, Any]]:
         recipes = []
         recipe_gen = RecipeGenerator(openai_api_key) 
         
-        for i, video in enumerate(result):
-            try:
-                recipe = recipe_gen.generate_recipe(str(video))
-                recipes.append(recipe.model_dump())
-            except Exception as e:
-                # Log error but continue processing other videos
-                print(f"Error processing video {i}: {str(e)}")
-                continue
+        # Process videos in batches to avoid timeouts
+        batch_size = 1  # Process one video at a time to ensure reliability
+        for i in range(0, len(result), batch_size):
+            batch = result[i:i + batch_size]
+            for video in batch:
+                try:
+                    recipe = recipe_gen.generate_recipe(str(video))
+                    recipes.append(recipe.model_dump())
+                except Exception as e:
+                    print(f"Error processing video {i}: {str(e)}")
+                    continue
                 
         if not recipes:
             raise HTTPException(status_code=404, detail="No recipes could be generated from the videos")

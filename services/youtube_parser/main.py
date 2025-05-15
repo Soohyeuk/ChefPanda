@@ -65,7 +65,7 @@ async def scrape_channel(request: ScrapeRequest) -> List[Dict[str, Any]]:
     
     Args:
         request: ScrapeRequest containing:
-            - handle: YouTube channel handle (e.g. 'yooxicman')
+            - handle: YouTube channel handle (e.g. '@yooxicman')
             - language: Language code (default: 'en')
             - quantity: Number of videos to scrape (default: 200)
             
@@ -75,16 +75,27 @@ async def scrape_channel(request: ScrapeRequest) -> List[Dict[str, Any]]:
     try:
         scraper = YouTubeScraper(yt_api_key, request.language, request.quantity)
         channel_id = scraper.get_channel_id_by_handle(request.handle)
-        result = scraper.fetch_channel_videos_by_id(channel_id)
+        result = scraper.process_videos(type="channel_id", arg=channel_id)
+        print(result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
     try:
         recipes = []
-        for video in result:
-            recipe_gen = RecipeGenerator(openai_api_key)
-            recipe = recipe_gen.generate_recipe(str(video))
-            recipes.append(recipe.model_dump())
+        recipe_gen = RecipeGenerator(openai_api_key) 
+        
+        for i, video in enumerate(result):
+            try:
+                recipe = recipe_gen.generate_recipe(str(video))
+                recipes.append(recipe.model_dump())
+            except Exception as e:
+                # Log error but continue processing other videos
+                print(f"Error processing video {i}: {str(e)}")
+                continue
+                
+        if not recipes:
+            raise HTTPException(status_code=404, detail="No recipes could be generated from the videos")
+            
         return recipes
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing recipes: {str(e)}")
@@ -126,6 +137,7 @@ async def scrape_video_id(request: VideoRequest) -> Dict[str, Any]:
     """
     try:
         scraper = YouTubeScraper(yt_api_key, request.language)
+        a = scraper.fetch_video_by_id(request.id)
         results = scraper.process_videos(type="id", arg=request.id)
         if not results:
             raise HTTPException(status_code=404, detail="Video not found or no transcript available")

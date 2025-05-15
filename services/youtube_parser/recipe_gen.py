@@ -6,6 +6,7 @@ from .type import Ingredient, InstructionStep, Recipe
 import openai # type: ignore
 from typing import List, Optional, Dict
 from pathlib import Path
+import json
 
 class RecipeGenerator:  
     def __init__(self, api_key: str): 
@@ -44,7 +45,7 @@ class RecipeGenerator:
         
         try:
             response = self.openai.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": self.system_prompt},
                     {"role": "user", "content": prompt}
@@ -55,8 +56,34 @@ class RecipeGenerator:
             content = response.choices[0].message.content
             if not content:
                 raise RuntimeError("Empty response from OpenAI")
-            self.recipe = Recipe.model_validate_json(content)
-            return self.recipe
+                
+            # Validate JSON structure before parsing
+            try:
+                json_data = json.loads(content)
+                # Basic structure validation
+                required_fields = ["title", "ingredients", "steps"]
+                for field in required_fields:
+                    if field not in json_data:
+                        raise ValueError(f"Missing required field: {field}")
+                
+                # Validate steps format
+                if not isinstance(json_data["steps"], list):
+                    raise ValueError("'steps' must be an array")
+                for step in json_data["steps"]:
+                    if not isinstance(step, dict) or "step_number" not in step or "description" not in step:
+                        raise ValueError("Each step must be an object with 'step_number' and 'description'")
+                    if not isinstance(step["step_number"], int):
+                        raise ValueError("step_number must be an integer")
+                
+                # If validation passes, parse with pydantic
+                self.recipe = Recipe.model_validate_json(content)
+                return self.recipe
+                
+            except json.JSONDecodeError as e:
+                raise RuntimeError(f"Invalid JSON response from OpenAI: {str(e)}")
+            except ValueError as e:
+                raise RuntimeError(f"Invalid response structure: {str(e)}")
+                
         except openai.APIError as e:
             raise RuntimeError(f"OpenAI API error: {str(e)}")
         except Exception as e:
@@ -153,3 +180,25 @@ class RecipeGenerator:
         if self.recipe.nutritional_info is None:
             raise RuntimeError("Nutritional info not set in recipe")
         return self.recipe.nutritional_info
+
+
+if __name__ == "__main__":
+    from dotenv import load_dotenv
+    import os
+    from yt_scrape import YouTubeScraper
+    load_dotenv()
+    youtube_api_key = os.getenv("YOUTUBE_API_KEY")
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    print(f"OpenAI API key loaded: {'Yes' if openai_api_key else 'No'}")
+    print(f"OpenAI API key length: {len(openai_api_key) if openai_api_key else 0}")  # Debug line
+    print(f"OpenAI API key starts with: {openai_api_key[:5] + '...' if openai_api_key else 'None'}")  # Debug line
+    scraper = YouTubeScraper(youtube_api_key, language="en", max_results=1)
+    channel_id = scraper.get_channel_id_by_handle("@EssenRecipes")
+    videos = scraper.process_videos(type="channel_id", arg=channel_id)
+
+    print("Generating recipe...")
+    recipe_gen = RecipeGenerator(openai_api_key)
+    
+    print("openai working")
+    recipe = recipe_gen.generate_recipe(videos[0]["snippets"])
+    print(recipe)

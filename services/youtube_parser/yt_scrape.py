@@ -3,9 +3,11 @@ YouTube video scraping and transcript processing functionality.
 """
 
 import requests # type: ignore
-from .type import FetchedTranscript, FetchedTranscriptSnippet
+from .type import FetchedTranscript
 from youtube_transcript_api import YouTubeTranscriptApi # type: ignore
 from typing import List, Tuple, Dict, Any, Optional
+import time
+from xml.etree.ElementTree import ParseError
 
 
 
@@ -15,40 +17,41 @@ class YouTubeScraper:
         self.language = language
         self.max_results = max_results
 
-    def _convert_transcript(self, ytt_transcript: Any) -> FetchedTranscript:
-        """Convert YouTubeTranscriptApi transcript to our FetchedTranscript type"""
-        snippets = [
-            FetchedTranscriptSnippet(
-                text=item['text'],
-                start=item['start'],
-                duration=item['duration']
-            )
-            for item in ytt_transcript
-        ]
-        return FetchedTranscript(
-            snippets=snippets,
-            video_id=ytt_transcript.video_id,
-            language_code=ytt_transcript.language_code,
-            is_generated=ytt_transcript.is_generated
-        )
-
-    def get_transcript(self, video_id: str) -> FetchedTranscript:
+    def get_transcript(self, video_id: str, max_retries: int = 3, delay: float = 0.5) -> FetchedTranscript:
         """
-        Fetch transcript for a given video ID.
+        Fetch transcript for a given video ID with retry mechanism.
         
         Args:
             video_id: YouTube video ID
+            max_retries: Maximum number of retry attempts
+            delay: Delay between retries in seconds
 
         Returns:
             FetchedTranscript object
+            
+        Raises:
+            Exception: If transcript cannot be fetched after all retries
         """
         ytt_api = YouTubeTranscriptApi()
-        ytt_transcript = ytt_api.fetch(video_id, languages=self.language)
-        return self._convert_transcript(ytt_transcript)
+        last_exception = None
+        
+        for attempt in range(max_retries):
+            try:
+                ytt_transcript = ytt_api.fetch(video_id, languages=[self.language])
+                return ytt_transcript
+            except ParseError as e:
+                last_exception = e
+                if attempt < max_retries - 1:
+                    time.sleep(delay)
+                continue
+            except Exception as e:
+                raise e
+                
+        raise last_exception or Exception(f"Failed to fetch transcript for video {video_id}")
 
     def transcript_to_dict(self, transcript: FetchedTranscript, title: str) -> Dict[str, Any]:
         """
-        Convert transcript to JSON format.
+        Convert transcript to dict format.
         
         Args:
             transcript: FetchedTranscript object
@@ -185,20 +188,30 @@ class YouTubeScraper:
         
         results = []
         for video_id, title in videos:
+            success = False
             for attempt in range(4):
                 try:
                     transcript = self.get_transcript(video_id)
-                    dict = self.transcript_to_dict(transcript, title)
-                    results.append(dict)
+                    video_dict = self.transcript_to_dict(transcript, title)
+                    results.append(video_dict)
+                    success = True
                     break 
                 except Exception as e:
                     if attempt < 3:
                         print(f"Error processing video {video_id} (attempt {attempt+1}): {str(e)}. Retrying...")
                     else:
                         print(f"Failed to process video {video_id} after 4 attempts: {str(e)}")
-
+            
+            if not success:
+                # If all attempts failed, add a placeholder dict with error information
+                results.append({
+                    "title": title,
+                    "video_id": video_id,
+                    "error": "Failed to fetch transcript",
+                    "snippets": ""
+                })
+                
         return results
-
 
 
 

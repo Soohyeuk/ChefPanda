@@ -117,7 +117,7 @@ class YouTubeScraper:
             'maxResults': self.max_results,
             'key': self.api_key
         }
-        response = requests.get(url, params=params, timeout=(10, 60))  # (connect timeout, read timeout)
+        response = requests.get(url, params=params)
         data = response.json()
 
         return [(item['id']['videoId'], item['snippet']['title']) 
@@ -139,7 +139,7 @@ class YouTubeScraper:
             'forHandle': handle.lstrip('@'),
             'key': self.api_key
         }
-        response = requests.get(url, params=params, timeout=(10, 60))  # (connect timeout, read timeout)
+        response = requests.get(url, params=params)
         data = response.json()
 
         items = data.get('items', [])
@@ -158,7 +158,7 @@ class YouTubeScraper:
             'id': video_id,
             'key': self.api_key
         }
-        response = requests.get(url, params=params, timeout=(10, 60))  # (connect timeout, read timeout)
+        response = requests.get(url, params=params)
         data = response.json()
         items = data.get('items', [])
         return [(item['id'], item['snippet']['title']) for item in items]

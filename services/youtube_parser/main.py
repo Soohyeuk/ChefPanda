@@ -2,8 +2,17 @@
 FastAPI server for YouTube video parsing and recipe generation.
 """
 
+"""
+To-do: 
+i need to fix the way it logs in db even before the recipe is actually generated. 
+i also need to now create recipe table and actually store the recipe genreated in the table 
+
+--> I need to do it for all scraping methods.
+"""
+
+
 import fastapi # type: ignore
-from fastapi import HTTPException # type: ignore
+from fastapi import HTTPException, Header # type: ignore
 from pydantic import BaseModel # type: ignore
 from .yt_scrape import YouTubeScraper
 from .recipe_gen import RecipeGenerator
@@ -12,26 +21,33 @@ from dotenv import load_dotenv # type: ignore
 import os
 from contextlib import asynccontextmanager
 from typing import List, Dict, Any
+from supabase import create_client, Client # type: ignore
+from datetime import datetime
 
 yt_api_key = None 
 openai_api_key = None 
+supabase: Client = None
 
 @asynccontextmanager
 async def lifespan(app: fastapi.FastAPI):
     """
     Lifespan context manager for FastAPI application.
     Handles startup and shutdown events.
+    Initializes Supabase client and API keys.
     """
     load_dotenv()
-    global yt_api_key, openai_api_key
+    global yt_api_key, openai_api_key, supabase
     yt_api_key = os.getenv("YOUTUBE_API_KEY")
     openai_api_key = os.getenv("OPENAI_API_KEY")
-    
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_KEY")
     if not yt_api_key:
         raise ValueError("YOUTUBE_API_KEY environment variable not set")
     if not openai_api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set")
-    
+    if not supabase_url or not supabase_key:
+        raise ValueError("SUPABASE_URL and SUPABASE_KEY environment variables must be set")
+    supabase = create_client(supabase_url, supabase_key)
     yield  
 
 app = fastapi.FastAPI(
@@ -40,10 +56,6 @@ app = fastapi.FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
-
-@app.get("/")
-def read_root():
-    return {"message": "Hello, World!"}
 
 @app.post("/scrape_channel")
 async def scrape_channel(request: ScrapeRequest) -> List[Dict[str, Any]]:
@@ -135,37 +147,84 @@ async def scrape_query(request: QueryRequest) -> List[Dict[str, Any]]:
         raise HTTPException(status_code=500, detail=f"Error processing recipes: {str(e)}")
 
 @app.post("/scrape_video_id")
-async def scrape_video_id(request: VideoRequest) -> Dict[str, Any]:
-    """
-    Scrape a recipe from a specific video ID.
-    
-    Args:
-        request: VideoRequest containing:
-            - id: YouTube video ID
-            - language: Language code (default: 'en')
-            
-    Returns:
-        Dict[str, Any]: Recipe dictionary
-    """
+async def scrape_video_id(request: VideoRequest, authorization: str = Header(None)) -> Dict[str, Any]:
+    if not authorization or not authorization.startswith('Bearer '):
+        raise HTTPException(status_code=401, detail="Missing or invalid authorization token")
+
     try:
-        # Initialize scraper and get video
+        token = authorization.split(' ')[1]
+        user = supabase.auth.get_user(token)
+        user_id = user.user.id
+
+        user_supabase = create_client(
+            os.getenv("SUPABASE_URL"),
+            os.getenv("SUPABASE_KEY")
+        )
+        user_supabase.auth.set_session(token, "")
+
         scraper = YouTubeScraper(yt_api_key, request.language)
         results = scraper.process_videos(type="id", arg=request.id)
+
         if not results:
             raise HTTPException(status_code=404, detail="Video not found or no transcript available")
-            
-        # Generate recipe
-        try:
-            recipe_gen = RecipeGenerator(openai_api_key)
-            recipe = recipe_gen.generate_recipe(str(results[0]))  # Process first (and only) result
-            return recipe.model_dump()
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error generating recipe: {str(e)}")
-            
+
+        # 🔹 Generate recipe
+        recipe_gen = RecipeGenerator(openai_api_key)
+        recipe = recipe_gen.generate_recipe(str(results[0]))
+        recipe_data = recipe.model_dump()
+
+        # 🔹 Insert into recipes table
+        recipe_insert_data = {
+            "title": recipe_data["title"],
+            "video_id": recipe_data["video_id"],
+            "servings": recipe_data.get("servings"),
+            "prep_time": recipe_data.get("prep_time"),
+            "cook_time": recipe_data.get("cook_time"),
+            "calories": recipe_data["nutritional_info"].get("calories"),
+            "protein": recipe_data["nutritional_info"].get("protein"),
+            "carbs": recipe_data["nutritional_info"].get("carbs"),
+            "fat": recipe_data["nutritional_info"].get("fat"),
+        }
+        recipe_response = user_supabase.table("recipes").insert(recipe_insert_data).execute()
+        recipe_id = recipe_response.data[0]["id"]
+
+        # 🔹 Insert ingredients
+        ingredients_data = [
+            {
+                "recipe_id": recipe_id,
+                "name": ing["name"],
+                "quantity": ing["quantity"]
+            }
+            for ing in recipe_data["ingredients"]
+        ]
+        user_supabase.table("ingredients").insert(ingredients_data).execute()
+
+        # 🔹 Insert steps
+        steps_data = [
+            {
+                "recipe_id": recipe_id,
+                "step_number": step["step_number"],
+                "description": step["description"]
+            }
+            for step in recipe_data["steps"]
+        ]
+        user_supabase.table("steps").insert(steps_data).execute()
+
+        # 🔹 Log generation last
+        user_supabase.table("recipe_generations").insert({
+            "user_id": user_id
+        }).execute()
+
+        return recipe_data
+
     except HTTPException:
         raise
     except Exception as e:
+        if 'Invalid JWT' in str(e):
+            raise HTTPException(status_code=401, detail="Invalid authentication token")
         raise HTTPException(status_code=500, detail=f"Error processing video: {str(e)}")
+
+
 
 @app.get("/status")
 async def get_status() -> Dict[str, Any]:
@@ -191,32 +250,6 @@ async def get_status() -> Dict[str, Any]:
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error checking status: {str(e)}")
-
-
-
-
-@app.get("/languages")
-async def get_supported_languages() -> Dict[str, List[Dict[str, str]]]:
-    """
-    Get list of supported languages for video transcription and recipe generation.
-    
-    Returns:
-        Dict[str, List[Dict[str, str]]]: Supported languages with codes
-    """
-    # Add or modify languages based on what your service actually supports
-    supported_languages = [
-        {"code": "en", "name": "English"},
-        {"code": "es", "name": "Spanish"},
-        {"code": "fr", "name": "French"},
-        {"code": "de", "name": "German"},
-        {"code": "it", "name": "Italian"},
-        {"code": "pt", "name": "Portuguese"},
-        {"code": "ja", "name": "Japanese"},
-        {"code": "ko", "name": "Korean"},
-        {"code": "zh", "name": "Chinese"}
-    ]
-    
-    return {"supported_languages": supported_languages}
 
 @app.get("/limits")
 async def get_rate_limits() -> Dict[str, Any]:
@@ -296,5 +329,4 @@ async def get_videos_status(video_ids: str) -> Dict[str, Any]:
         return {"video_statuses": statuses}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error checking video status: {str(e)}")
-
 

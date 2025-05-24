@@ -26,7 +26,7 @@ ChefPanda is a hands-free cooking companion that transforms YouTube cooking tuto
 ### Backend
 - Python 3.8+
 - FastAPI
-- MongoDB with mongoengine ODM
+- Supabase (PostgreSQL) for authentication, user policy, and database CRUD
 - YouTube Data API v3
 - YouTube Transcript API
 - pytest for testing
@@ -46,7 +46,7 @@ ChefPanda is a hands-free cooking companion that transforms YouTube cooking tuto
 ### Prerequisites
 - Python 3.8 or higher
 - Node.js and npm
-- MongoDB
+- Supabase account and project (PostgreSQL database)
 - YouTube API credentials
 
 ### Installation
@@ -75,7 +75,8 @@ npm install
 ```bash
 # Backend (.env)
 YOUTUBE_API_KEY=your_api_key
-MONGODB_URI=your_mongodb_uri
+SUPABASE_URL=your_supabase_url
+SUPABASE_KEY=your_supabase_service_role_key
 
 # Frontend (.env.local)
 NEXT_PUBLIC_API_URL=http://localhost:8000
@@ -148,3 +149,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 Made with ❤️ for home cooks everywhere
+
+- FastAPI server will post requests and save to Supabase SQL database
+- All authentication, user policy, and CRUD operations are managed via Supabase

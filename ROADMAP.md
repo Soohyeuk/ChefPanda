@@ -1,24 +1,24 @@
 # ChefPanda Development Roadmap
 
-## MongoDB Integration
+## Supabase Integration
 
 ### Video Processing & Storage
-- Store processed video data and transcripts in MongoDB during processing phase
-- Maintain relationship between video data and generated recipes
+- Store processed video data and transcripts in Supabase (PostgreSQL) during processing phase
+- Maintain relationship between video data and generated recipes using foreign keys or references
 - Implement unique identifiers to link video data with corresponding recipes
 - Store metadata for efficient retrieval and analysis
 
 ### Recipe Generation & Storage
-- Store AI-generated recipes in MongoDB with references to source videos
+- Store AI-generated recipes in Supabase with references to source videos
 - Implement versioning system for recipe variations
-- Maintain data consistency between video and recipe collections
+- Maintain data consistency between video and recipe tables
 - Enable efficient recipe retrieval and updates
 
 ### Caching & Optimization
-- Implement caching system to check for previously scraped videos
+- Implement caching system to check for previously scraped videos (can use Supabase or in-memory cache)
 - Avoid duplicate processing of already scraped content
 - Optimize storage and retrieval operations
-- Consider implementing TTL (time-to-live) for cache management
+- Consider implementing TTL (time-to-live) for cache management if needed
 
 ## Recipe Retrieval System
 
@@ -53,7 +53,7 @@
 ### Rate Limiting Implementation
 - Implement basic rate limiting:
   - Limit scraping to 3 times per week (initial plan)
-  - Track usage per client
+  - Track usage per client (store usage data in Supabase)
   - Implement rate limit checking logic
 
 ### Future Subscription Features
@@ -66,12 +66,12 @@
 - Plan for premium feature implementation:
   - "Regenerate recipe by AI" feature for paid users
   - Additional premium features to be determined
-- Note: User authentication not planned for MVP
+- Note: User authentication and policy will be managed by Supabase
 
 ## Implementation Priorities
 
-1. MongoDB Integration
-   - Essential for data persistence and retrieval
+1. Supabase Integration
+   - Essential for data persistence, authentication, and user policy
    - Foundation for all other features
 
 2. Recipe Retrieval System
@@ -88,10 +88,11 @@
 
 ## Notes
 
-- MVP will focus on core functionality without user authentication
+- MVP will focus on core functionality with Supabase for all data and user management
 - Monetization features will be implemented post-MVP
 - ML model selection and integration strategy to be determined based on initial usage patterns
 - API design will be optimized based on frontend requirements and usage patterns
+- FastAPI server will interact with Supabase SQL for all CRUD and data operations
 
 ---
 *This roadmap is a living document and will be updated as the project evolves.* 

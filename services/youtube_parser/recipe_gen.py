@@ -25,23 +25,34 @@ class RecipeGenerator:
         with open(prompts_dir / "recipe_extraction.txt", "r") as f:
             self.extraction_prompt_template = f.read().strip()
 
-    def generate_recipe(self, transcript: str) -> Recipe:
+    def generate_recipe(self, transcript_data: str) -> Recipe:
         """
         Generate a complete recipe from a video transcript using OpenAI.
         
         Args:
-            transcript (str): The video transcript to parse
+            transcript_data (str): The video transcript dictionary as a string
             
         Returns:
-            Recipe: A Recipe object containing title, ingredients, and steps
+            Recipe: A Recipe object containing title, video_id, ingredients, and steps
             
         Raises:
             RuntimeError: If recipe generation fails
             ValueError: If transcript is empty or whitespace
         """
-        if not transcript or transcript.isspace():
+        if not transcript_data or transcript_data.isspace():
             raise ValueError("Transcript cannot be empty or whitespace")
-        prompt = self.extraction_prompt_template.format(transcript=transcript)
+            
+        # Parse the transcript string back into a dictionary
+        try:
+            transcript_dict = eval(transcript_data)
+            video_id = transcript_dict.get('video_id')
+            if not video_id:
+                raise ValueError("Transcript data missing video_id")
+            transcript_text = transcript_dict.get('snippets', '')
+        except Exception as e:
+            raise ValueError(f"Invalid transcript data format: {str(e)}")
+            
+        prompt = self.extraction_prompt_template.format(transcript=transcript_text)
         
         try:
             response = self.openai.chat.completions.create(
@@ -66,6 +77,9 @@ class RecipeGenerator:
                     if field not in json_data:
                         raise ValueError(f"Missing required field: {field}")
                 
+                # Add video_id to the JSON data
+                json_data['video_id'] = video_id
+                
                 # Validate steps format
                 if not isinstance(json_data["steps"], list):
                     raise ValueError("'steps' must be an array")
@@ -76,7 +90,7 @@ class RecipeGenerator:
                         raise ValueError("step_number must be an integer")
                 
                 # If validation passes, parse with pydantic
-                self.recipe = Recipe.model_validate_json(content)
+                self.recipe = Recipe.model_validate_json(json.dumps(json_data))
                 return self.recipe
                 
             except json.JSONDecodeError as e:

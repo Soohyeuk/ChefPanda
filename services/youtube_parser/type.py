@@ -1,7 +1,5 @@
 from pydantic import BaseModel # type: ignore
-from mongoengine import Document, StringField, BooleanField, DateTimeField # type: ignore
 from typing import List, Dict
-from datetime import datetime
 
 class FetchedTranscriptSnippet(BaseModel):
     text: str 
@@ -24,6 +22,7 @@ class InstructionStep(BaseModel):
 
 class Recipe(BaseModel):
     title: str
+    video_id: str
     ingredients: List[Ingredient]
     steps: List[InstructionStep]
     servings: str | None = None
@@ -31,11 +30,3 @@ class Recipe(BaseModel):
     cook_time: str | None = None
     nutritional_info: Dict[str, float] | None = None
 
-class Video(Document):
-    title = StringField(required=True)
-    video_id = StringField(required=True, unique=True)
-    is_generated = BooleanField(default=True)
-    language_code = StringField(required=True)
-    snippets = StringField()
-    source_type = StringField(required=True)  # 'search' or 'channel id'
-    created_at = DateTimeField(default=datetime.utcnow)

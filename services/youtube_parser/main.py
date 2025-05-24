@@ -4,10 +4,7 @@ FastAPI server for YouTube video parsing and recipe generation.
 
 """
 To-do: 
-i need to fix the way it logs in db even before the recipe is actually generated. 
-i also need to now create recipe table and actually store the recipe genreated in the table 
-
---> I need to do it for all scraping methods.
+i need to upload recipes to the db and log generation when scraping using channel handle and query. 
 """
 
 

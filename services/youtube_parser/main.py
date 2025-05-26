@@ -4,13 +4,12 @@ FastAPI server for YouTube video parsing and recipe generation.
 
 """
 To-do: 
-i need to upload recipes to the db and log generation when scraping using channel handle and query. 
+ - i need to upload recipes to the db and log generation when scraping using channel handle and query. 
 """
 
 
 import fastapi # type: ignore
 from fastapi import HTTPException, Header # type: ignore
-from pydantic import BaseModel # type: ignore
 from .yt_scrape import YouTubeScraper
 from .recipe_gen import RecipeGenerator
 from .types import ScrapeRequest, QueryRequest, VideoRequest
@@ -19,7 +18,6 @@ import os
 from contextlib import asynccontextmanager
 from typing import List, Dict, Any
 from supabase import create_client, Client # type: ignore
-from datetime import datetime
 
 yt_api_key = None 
 openai_api_key = None 

@@ -1,11 +1,12 @@
 import React from 'react'
+import Header from '@/components/Header/Header'
 
 const Home: React.FC = () => {
   return (
-    <div>
-      <h1>Home</h1>
+    <div className="w-full h-full">
+      <Header />
     </div>
   )
 }
-
 export default Home
+

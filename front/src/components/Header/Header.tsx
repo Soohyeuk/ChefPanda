@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 
 const Header : React.FC = () => {
   return (
-    <div className="flex w-full h-24 justify-center items-center bg-yellow-500">
+    <div className="flex w-full h-18 justify-center items-center bg-yellow-500">
         <div className="flex w-3/4 h-24 justify-between items-center">
             <div className="flex h-full justify-between items-center">
                 <img src={logo} alt="logo" className="w-13 h-13" />

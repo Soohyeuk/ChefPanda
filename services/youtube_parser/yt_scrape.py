@@ -95,8 +95,15 @@ class YouTubeScraper:
         response = requests.get(url, params=params, timeout=(10, 60))  # (connect timeout, read timeout)
         data = response.json()
 
-        return [(item['id']['videoId'], item['snippet']['title']) 
-                for item in data.get('items', [])]
+        # Surface YouTube API errors explicitly so the caller sees what's wrong
+        if "error" in data:
+            message = data["error"].get("message", "Unknown YouTube API error")
+            raise RuntimeError(f"YouTube API error (search): {message}")
+
+        return [
+            (item['id']['videoId'], item['snippet']['title'])
+            for item in data.get('items', [])
+        ]
 
     def fetch_channel_videos_by_id(self, channel_id: str) -> List[Tuple[str, str]]:
         """
@@ -120,8 +127,14 @@ class YouTubeScraper:
         response = requests.get(url, params=params)
         data = response.json()
 
-        return [(item['id']['videoId'], item['snippet']['title']) 
-                for item in data.get('items', [])]
+        if "error" in data:
+            message = data["error"].get("message", "Unknown YouTube API error")
+            raise RuntimeError(f"YouTube API error (channel videos): {message}")
+
+        return [
+            (item['id']['videoId'], item['snippet']['title'])
+            for item in data.get('items', [])
+        ]
 
     def get_channel_id_by_handle(self, handle: str) -> str:
         """
@@ -160,6 +173,11 @@ class YouTubeScraper:
         }
         response = requests.get(url, params=params)
         data = response.json()
+
+        if "error" in data:
+            message = data["error"].get("message", "Unknown YouTube API error")
+            raise RuntimeError(f"YouTube API error (video by id): {message}")
+
         items = data.get('items', [])
         return [(item['id'], item['snippet']['title']) for item in items]
 

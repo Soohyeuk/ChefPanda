@@ -356,12 +356,13 @@ app = fastapi.FastAPI(
     lifespan=lifespan
 )
 
-# Enable CORS so the React frontend (localhost:3000) can call this API
+# Enable CORS so the React frontend (local dev + Vercel) can call this API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "https://chef-panda.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],

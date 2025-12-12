@@ -62,7 +62,6 @@ class RecipeGenerator:
                     {"role": "user", "content": prompt}
                 ],
                 response_format={"type": "json_object"},
-                temperature=0.7  # Balanced between creativity and accuracy
             )
             content = response.choices[0].message.content
             if not content:
